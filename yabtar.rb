@@ -31,12 +31,12 @@ class BlktraceStatistics
 
         #FIXME: Hardcoded action lists.
         #FIXME: Move bin/str action representation into a method
-        a = case r.action
-        when 0x00110001
+        a = case (r.action & 0x0000FFFF)
+        when 0x0001
             'Q'
-        when 0x40010011
+        when 0x0011
             'DRV'
-        when 0x00810008
+        when 0x0008
             'C'
         end
 
