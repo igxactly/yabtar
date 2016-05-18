@@ -32,6 +32,31 @@ class BlktraceStatistics
 
         recordGroup = @trace_batches[r.sector]
 
+#TODO: separate blktrace data structure definitions?
+=begin
+
+enum blktrace_act {
+    __BLK_TA_QUEUE = 1,     /* queued */
+    __BLK_TA_BACKMERGE,     /* back merged to existing rq */
+    __BLK_TA_FRONTMERGE,        /* front merge to existing rq */
+    __BLK_TA_GETRQ,         /* allocated new request */
+    __BLK_TA_SLEEPRQ,       /* sleeping on rq allocation */
+    __BLK_TA_REQUEUE,       /* request requeued */
+    __BLK_TA_ISSUE,         /* sent to driver */
+    __BLK_TA_COMPLETE,      /* completed by driver */
+    __BLK_TA_PLUG,          /* queue was plugged */
+    __BLK_TA_UNPLUG_IO,     /* queue was unplugged by io */
+    __BLK_TA_UNPLUG_TIMER,      /* queue was unplugged by timer */
+    __BLK_TA_INSERT,        /* insert request */
+    __BLK_TA_SPLIT,         /* bio was split */
+    __BLK_TA_BOUNCE,        /* bio was bounced */
+    __BLK_TA_REMAP,         /* bio was remapped */
+    __BLK_TA_ABORT,         /* request aborted */
+    __BLK_TA_DRV_DATA,      /* driver-specific binary data */
+};
+
+=end
+
         #FIXME: Hardcoded action lists.
         #FIXME: Move bin/str action representation into a method
         a = case (r.action & 0x0000FFFF)
