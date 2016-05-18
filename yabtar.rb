@@ -14,51 +14,77 @@ end
 
 class BlktraceStatistics
     def initialize
-        @recordsHash = Hash.new
-        @statisticsHash = Hash.new
+        @trace_batches = Hash.new
+        @num_batches = 0
 
-        @statisticsHash['count'] = 0
-        @statisticsHash['DRV-Q'] = 0
-        @statisticsHash['C-DRV'] = 0
+        @totals = Hash.new
+        @minimums = Hash.new
+        @maximums = Hash.new
+
+        @totals['DRV-Q'] = 0
+        @totals['C-DRV'] = 0
     end
 
     def add_record (r)
-        if @recordsHash[r.sector] == nil
-            @recordsHash[r.sector] = Hash.new
+        if @trace_batches[r.sector] == nil
+            @trace_batches[r.sector] = Hash.new
         end
 
-        recordGroup = @recordsHash[r.sector]
+        recordGroup = @trace_batches[r.sector]
 
         #FIXME: Hardcoded action lists.
         #FIXME: Move bin/str action representation into a method
         a = case (r.action & 0x0000FFFF)
-        when 0x0001
-            'Q'
-        when 0x0011
-            'DRV'
-        when 0x0008
-            'C'
-        end
+            when 0x0001
+                'Q'
+            when 0x0011
+                'DRV'
+            when 0x0008
+                'C'
+            end
 
         recordGroup.store(a, r)
 
-        # puts @recordsHash, "\n\n"
+        # puts @trace_batches, "\n\n"
 
+        #FIXME: Hardcoded action lists.
         if (['Q', 'DRV', 'C'] - recordGroup.keys).empty?
-            @statisticsHash['DRV-Q'] += recordGroup['DRV'].time - recordGroup['Q'].time
-            @statisticsHash['C-DRV'] += recordGroup['C'].time - recordGroup['DRV'].time
-            @statisticsHash['count'] += 1
+            drv_q = recordGroup['DRV'].time - recordGroup['Q'].time
+            c_drv = recordGroup['C'].time - recordGroup['DRV'].time
 
-            @recordsHash.delete(r.sector)
+            @totals['DRV-Q'] += drv_q
+            @totals['C-DRV'] += c_drv
+
+            @num_batches += 1
+
+            #FIXME: Hardcoded action lists.
+            if (not @minimums['DRV-Q']) or (@minimums['DRV-Q'] > drv_q)
+                @minimums['DRV-Q'] = drv_q
+            end
+
+            if (not @minimums['C-DRV']) or (@minimums['C-DRV'] > c_drv)
+                @minimums['C-DRV'] = c_drv
+            end
+
+            if (not @maximums['DRV-Q']) or (@maximums['DRV-Q'] < drv_q)
+                @maximums['DRV-Q'] = drv_q
+            end
+
+            if (not @maximums['C-DRV']) or (@maximums['C-DRV'] < c_drv)
+                @maximums['C-DRV'] = c_drv
+            end
+
+            @trace_batches.delete(r.sector)
         end
     end
 
     def to_s ()
-        cnt = @statisticsHash['count']
-        avg_drv_q = @statisticsHash['DRV-Q'].to_f / cnt / 1000
-        avg_c_drv = @statisticsHash['C-DRV'].to_f / cnt / 1000
+        cnt = @num_batches
+        avg_drv_q = @totals['DRV-Q'].to_f / cnt
+        avg_c_drv = @totals['C-DRV'].to_f / cnt
 
-        return 'BlktraceStatistics: cnt:%u avgDRV-Q:%fus avgC-DRV:%fus' % [cnt, avg_drv_q, avg_c_drv]
+        return "BlktraceStatistics: cnt=%u\n  avg DRV-Q=%fus C-DRV=%fus\n  min DRV-Q=%fus C-DRV=%fus\n  max DRV-Q=%fus C-DRV=%fus" %
+            [cnt, avg_drv_q, avg_c_drv, @minimums['DRV-Q'], @minimums['C-DRV'], @maximums['DRV-Q'], @maximums['C-DRV']].map{|x| (x / 1000)}
     end
 end
 
@@ -67,7 +93,7 @@ def read_and_parse_one_record (f)
 
     # # # # # #
     # Reference:
-    #   struct blk_trace
+    #   struct blk
     #    - definition is in include/uapi/linux/blktrace_api.h
     #
     # __u32 magic;        /* MAGIC << 8 | version */
