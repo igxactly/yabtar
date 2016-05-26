@@ -32,7 +32,7 @@ class BlktraceStatistics
 
         recordGroup = @trace_batches[r.sector]
 
-#TODO: separate blktrace data structure definitions?
+        #TODO: separate blktrace data structure definitions?
 =begin
 
 enum blktrace_act {
@@ -103,6 +103,14 @@ enum blktrace_act {
         end
     end
 
+    def get_averages ()
+        cnt = @num_batches
+        avg_drv_q = @totals['DRV-Q'].to_f / cnt
+        avg_c_drv = @totals['C-DRV'].to_f / cnt
+
+        return {'DRV-Q'=>avg_drv_q, 'C-DRV'=>avg_c_drv}
+    end
+
     def to_s ()
         cnt = @num_batches
         avg_drv_q = @totals['DRV-Q'].to_f / cnt
@@ -156,6 +164,7 @@ end
 
 #################
 # main program flow starts here
+require 'json'
 
 Signal.trap("PIPE", "EXIT")
 
@@ -170,7 +179,20 @@ File.open(ARGV[0], "rb") do |f|
     end
 end
 
+
 puts "\n\n"
 puts statistics
 
+puts "\n\n"
+File.open('yabtar_output.json', "w") do |f|
+    t = JSON.generate({"totals"=>statistics.instance_variable_get(:@totals),
+                        "minimums"=>statistics.instance_variable_get(:@minimums),
+                        "maximums"=>statistics.instance_variable_get(:@maximums),
+                        "totals"=>statistics.get_averages})
+    puts 'json: ', t
+    f.write(t)
+end
+
+puts "\n\n"
+puts "statistics written to outfile"
 
