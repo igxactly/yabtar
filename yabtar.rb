@@ -175,20 +175,21 @@ File.open(ARGV[0], "rb") do |f|
         record = read_and_parse_one_record(f)
         statistics.add_record(record)
 
-        puts record
+        # puts record
     end
 end
 
 
+puts "skip printing records"
 puts "\n\n"
 puts statistics
 
 puts "\n\n"
-File.open('yabtar_output.json', "w") do |f|
-    t = JSON.generate({"totals"=>statistics.instance_variable_get(:@totals),
-                        "minimums"=>statistics.instance_variable_get(:@minimums),
-                        "maximums"=>statistics.instance_variable_get(:@maximums),
-                        "totals"=>statistics.get_averages})
+File.open(ARGV[1], "w") do |f|
+# "total"=>statistics.instance_variable_get(:@totals),
+    t = JSON.generate({"min"=>statistics.instance_variable_get(:@minimums),
+                       "max"=>statistics.instance_variable_get(:@maximums),
+                       "mean"=>statistics.get_averages})
     puts 'json: ', t
     f.write(t)
 end
