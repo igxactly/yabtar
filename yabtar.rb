@@ -23,6 +23,10 @@ class BlktraceStatistics
 
         @totals['DRV-Q'] = 0
         @totals['C-DRV'] = 0
+        @minimums['DRV-Q'] = 0
+        @minimums['C-DRV'] = 0
+        @maximums['DRV-Q'] = 0
+        @maximums['C-DRV'] = 0
     end
 
     def add_record (r)
@@ -83,11 +87,11 @@ enum blktrace_act {
             @num_batches += 1
 
             #FIXME: Hardcoded action lists.
-            if (not @minimums['DRV-Q']) or (@minimums['DRV-Q'] > drv_q)
+            if (not @minimums['DRV-Q']) or (@minimums['DRV-Q'] == 0) or (@minimums['DRV-Q'] > drv_q)
                 @minimums['DRV-Q'] = drv_q
             end
 
-            if (not @minimums['C-DRV']) or (@minimums['C-DRV'] > c_drv)
+            if (not @minimums['C-DRV']) or (@minimums['C-DRV'] == 0) or (@minimums['C-DRV'] > c_drv)
                 @minimums['C-DRV'] = c_drv
             end
 
@@ -105,8 +109,13 @@ enum blktrace_act {
 
     def get_averages ()
         cnt = @num_batches
-        avg_drv_q = @totals['DRV-Q'].to_f / cnt
-        avg_c_drv = @totals['C-DRV'].to_f / cnt
+
+        if cnt > 0
+            avg_drv_q = @totals['DRV-Q'].to_f / cnt
+            avg_c_drv = @totals['C-DRV'].to_f / cnt
+        else
+            avg_drv_q = avg_c_drv = 0
+        end
 
         return {'DRV-Q'=>avg_drv_q, 'C-DRV'=>avg_c_drv}
     end
@@ -116,8 +125,12 @@ enum blktrace_act {
         avg_drv_q = @totals['DRV-Q'].to_f / cnt
         avg_c_drv = @totals['C-DRV'].to_f / cnt
 
-        return "BlktraceStatistics: cnt=%u\n  avg DRV-Q=%fus C-DRV=%fus\n  min DRV-Q=%fus C-DRV=%fus\n  max DRV-Q=%fus C-DRV=%fus" %
-            [cnt, avg_drv_q, avg_c_drv, @minimums['DRV-Q'], @minimums['C-DRV'], @maximums['DRV-Q'], @maximums['C-DRV']].map{|x| (x / 1000)}
+        if @num_batches > 0
+            return "BlktraceStatistics: cnt=%u\n  avg DRV-Q=%fus C-DRV=%fus\n  min DRV-Q=%fus C-DRV=%fus\n  max DRV-Q=%fus C-DRV=%fus" %
+                ([cnt] + [avg_drv_q, avg_c_drv, @minimums['DRV-Q'], @minimums['C-DRV'], @maximums['DRV-Q'], @maximums['C-DRV']].map{|x| (x / 1000)})
+        else
+            return "BlktraceStatistics: cnt=%u\n  Nothing is collected" % [cnt]
+        end
     end
 end
 
@@ -168,28 +181,57 @@ require 'json'
 
 Signal.trap("PIPE", "EXIT")
 
-statistics = BlktraceStatistics.new
+read_statistics = BlktraceStatistics.new
+write_statistics = BlktraceStatistics.new
 
+$count = 0
 File.open(ARGV[0], "rb") do |f|
     while not f.eof
         record = read_and_parse_one_record(f)
-        statistics.add_record(record)
 
-        # puts record
+        rw = case (record.action & 0x00030000)
+             when 0x00010000
+                 'R'
+             when 0x00020000
+                 'W'
+             else
+                 nil
+             end
+
+        if rw == 'R'
+            read_statistics.add_record(record)
+        elsif rw == 'W'
+            write_statistics.add_record(record)
+        else
+            puts record
+        end
     end
 end
 
-
-puts "skip printing records"
+puts $count
 puts "\n\n"
-puts statistics
+puts "yabtar_read_stat:", read_statistics
+puts "yabtar_write_stat:", write_statistics
 
 puts "\n\n"
 File.open(ARGV[1], "w") do |f|
 # "total"=>statistics.instance_variable_get(:@totals),
-    t = JSON.generate({"min"=>statistics.instance_variable_get(:@minimums),
-                       "max"=>statistics.instance_variable_get(:@maximums),
-                       "mean"=>statistics.get_averages})
+    t = JSON.generate(
+        {
+            "R"=>
+            {
+                "min"=>read_statistics.instance_variable_get(:@minimums),
+                "max"=>read_statistics.instance_variable_get(:@maximums),
+                "mean"=>read_statistics.get_averages
+            },
+            "W"=>
+            {
+                "min"=>write_statistics.instance_variable_get(:@minimums),
+                "max"=>write_statistics.instance_variable_get(:@maximums),
+                "mean"=>write_statistics.get_averages
+            }
+
+        })
     puts 'json: ', t
     f.write(t)
 end
