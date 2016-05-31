@@ -30,9 +30,22 @@ class BlktraceStatistics
     end
 
     def add_record (r)
-        if @trace_batches[r.sector] == nil
+        a = case (r.action & 0x0000FFFF)
+            when 0x0001
+                'Q'
+            when 0x0011
+                'DRV'
+            when 0x0008
+                'C'
+            end
+
+        if @trace_batches[r.sector] == nil or a == 'Q' # some trace may be dropped?
             @trace_batches[r.sector] = Hash.new
         end
+
+        # if (['Q', 'DRV', 'C'] - recordGroup.keys).empty?
+        # ????? Q then DRV then C?
+        # end
 
         recordGroup = @trace_batches[r.sector]
 
@@ -63,23 +76,24 @@ enum blktrace_act {
 
         #FIXME: Hardcoded action lists.
         #FIXME: Move bin/str action representation into a method
-        a = case (r.action & 0x0000FFFF)
-            when 0x0001
-                'Q'
-            when 0x0011
-                'DRV'
-            when 0x0008
-                'C'
-            end
 
         recordGroup.store(a, r)
-
         # puts @trace_batches, "\n\n"
 
         #FIXME: Hardcoded action lists.
         if (['Q', 'DRV', 'C'] - recordGroup.keys).empty?
             drv_q = recordGroup['DRV'].time - recordGroup['Q'].time
             c_drv = recordGroup['C'].time - recordGroup['DRV'].time
+
+            if drv_q < 0
+                puts "Warning: minus!! %d" % drv_q
+                puts r
+            end
+
+            if c_drv < 0
+                puts "Warning: minus!! %d" % c_drv
+                puts r
+            end
 
             @totals['DRV-Q'] += drv_q
             @totals['C-DRV'] += c_drv
@@ -199,16 +213,16 @@ File.open(ARGV[0], "rb") do |f|
              end
 
         if rw == 'R'
+            # write_statistics.add_record(record)
             read_statistics.add_record(record)
         elsif rw == 'W'
             write_statistics.add_record(record)
         else
-            puts record
+            # puts record
         end
     end
 end
 
-puts $count
 puts "\n\n"
 puts "yabtar_read_stat:", read_statistics
 puts "yabtar_write_stat:", write_statistics
